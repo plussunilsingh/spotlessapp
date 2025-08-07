@@ -3,10 +3,10 @@ name: Spotless Code Formatter
 on:
   pull_request: # Run on every pull request
     branches:
-      - '**' # Match all branches
+      - [ "**" ] # Match all branches
   push:         # Optionally run on direct push
     branches:
-      - '**' # Match all branches
+      - [ "**" ] # Match all branches
 
 jobs:
   spotless-check:
@@ -19,7 +19,7 @@ jobs:
       - name: Set up JDK 21
         uses: actions/setup-java@v2
         with:
-          distribution: 'corretto' # Use OpenJDK
+          distribution: 'temurin' # Use OpenJDK
           java-version: '21'     # Adjust depending on your project
 
       - name: Run Spotless Check
