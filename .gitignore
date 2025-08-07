@@ -44,7 +44,7 @@ bin/
 *.ctxt
 
 # Gradle-specific ignores
-.gradle/  # Keep the gradle-wrapper.jar file if it's part of the jar process
+.gradle/
 /build/
 /!gradle-wrapper.jar    # Keep the gradle-wrapper.jar file if it's part of the build process
 .gradle/cache/
@@ -81,7 +81,6 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
-
 
 *.class
 *.jks
