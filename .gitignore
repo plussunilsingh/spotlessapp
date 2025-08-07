@@ -44,7 +44,7 @@ bin/
 *.ctxt
 
 # Gradle-specific ignores
-.gradle/
+.gradle/  # Keep the gradle-wrapper.jar file if it's part of the jar process
 /build/
 /!gradle-wrapper.jar    # Keep the gradle-wrapper.jar file if it's part of the build process
 .gradle/cache/
@@ -82,7 +82,6 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# Other build artifacts
 *.class
 *.jks
 *.pem
@@ -150,4 +149,7 @@ error.log
 .traces
 
 # IntelliJ Run Configurations (Optional - if sharing run/debug configurations with teammates):
+/gradle/build/
+/build
 /run/
+
