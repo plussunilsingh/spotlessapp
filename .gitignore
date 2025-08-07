@@ -151,7 +151,7 @@ error.log
 .traces
 
 # IntelliJ Run Configurations (Optional - if sharing run/debug configurations with teammates):
-/run/
-build/
 /gradle/build/
 /build
+/run/
+
