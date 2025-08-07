@@ -9,23 +9,16 @@ on:
       - [ "**" ] # Match all branches
 
 jobs:
-  spotless-check:
+  spotless:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v2
-
-      - name: Set up JDK 21
-        uses: actions/setup-java@v2
+      - uses: actions/checkout@v4
+      - name: jdk-21:21.0.1
+        uses: actions/setup-java@v4
         with:
           distribution: 'temurin' # Use OpenJDK
-          java-version: '21'     # Adjust depending on your project
-
+          java-version: '21.0.1'        # Use the specific version of JDK 21 (latest stable minor version)
+          java-package: 'jdk''     # Adjust depending on your project
       - name: Run Spotless Check
         run: |
           ./gradlew spotlessCheck
-      - name: Apply Spotless Changes 🧹 (optional)
-        if: ${{ github.event_name == 'push' }} # Run only on push (optionally enforce formatting)
-        run: |
-          ./gradlew spotlessApply

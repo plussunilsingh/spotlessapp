@@ -2,7 +2,7 @@ plugins {
 	id 'java'
 	id 'org.springframework.boot' version '3.5.4'
 	id 'io.spring.dependency-management' version '1.1.7'
-	id 'com.diffplug.spotless' version '6.18.0'
+	id 'com.diffplug.spotless' version '6.23.0'
 }
 
 group = 'com.testp'
@@ -30,15 +30,37 @@ tasks.named('test') {
 
 spotless {
 	java {
-		// Apply Google Java Style Guide
+		target 'src/**/*.java'
+		//step 1: Apply Google Java Style Guide
 		googleJavaFormat()
 
-		// Specify formatting rules (optional)
-		toggleOffOn("formatter:off", "formatter:on") // Allows exemptions
-		target '*.java'
+		//Rule 1: place opening braces on the next line
+		replaceRegex('Place braces on next line', '\\) \\{', ') {\n')
 
-		// Optional: License header inclusion
-		licenseHeader '// Copyright <YEAR> by <PROJECT>'
+		//Rule 2: Add blank lines around methods (except first/last method
+		replaceRegex('Add blank lines around methods',
+				'(\\})\\n( *(public|protected|private|static|\\s*void))', '$1\n\n$2')
+
+		//Rule 3: Remove extra blank lines (reduce multiple blank lines to one)
+		replaceRegex('Remove extra blank lines', '(\\n{2,})', '\n\n')
+
+		//Rule 4: Ensure single blank line after imports
+		replaceRegex('Ensure single blank line after imports', '(import [\\w.]+;)((?!\\n).)', '$1\n')
+
+		//Rule 5: Remove blank line after opening brace
+		replaceRegex('Remove blank line after braces', '\\{\\n\\n', '{\n')
+
+		//Rule 6: Remove leading/trailing whitespace from lines
+		replaceRegex('Remove leading/trailing whitespace from lines', '[ \\t]+$', '')
+
+		//Rule 7: Indentation (4 spaces)
+		indentWithSpaces(4) // Ensures all indentations use 4 spaves
+
+        // step 3: Remove unused imports
+		removeUnusedImports()
+
+        // step 4: Ensure files end with a newline
+		endWithNewline()
 	}
 
 	format('misc') {
@@ -47,4 +69,9 @@ spotless {
 		trimTrailingWhitespace()
 		endWithNewline()
 	}
+}
+
+
+tasks.named('build').configure {
+	dependsOn 'spotlessCheck'
 }
