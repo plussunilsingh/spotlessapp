@@ -21,6 +21,11 @@ jobs:
           distribution: 'temurin' # Use OpenJDK
           java-version: '21.0.1'        # Use the specific version of JDK 21 (latest stable minor version)
           java-package: 'jdk'     # Adjust depending on your project
+
+      # Add executable permissions to gradlew file
+      - name: Add executable permission to Gradle Wrapper
+        run: chmod +x ./gradlew
+
       - name: Run Spotless Check
         run: |
           ./gradlew spotlessCheck
