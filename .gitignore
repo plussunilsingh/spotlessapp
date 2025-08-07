@@ -45,8 +45,7 @@ bin/
 
 # Gradle-specific ignores
 .gradle/
-/build/
-/!gradle-wrapper.jar    # Keep the gradle-wrapper.jar file if it's part of the build process
+/!gradle-wrapper.jar    # Keep the gradle-wrapper.jar file if it's part of the jar process
 .gradle/cache/
 .gradle/daemon/
 .gradle/init-scripts/
@@ -82,7 +81,7 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# Other build artifacts
+# Other artifacts
 *.class
 *.jks
 *.pem
@@ -134,7 +133,6 @@ ehthumbs.db
 *.ggl
 
 # Frontend/React (if you have a UI project packaged with Spring Boot)
-build/
 dist/
 .eslintcache/
 .tmp/
@@ -151,4 +149,5 @@ error.log
 
 # IntelliJ Run Configurations (Optional - if sharing run/debug configurations with teammates):
 /run/
-/build
+build/
+/gradle/build/
