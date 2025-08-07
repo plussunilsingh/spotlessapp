@@ -53,7 +53,10 @@ spotless {
 		//Rule 6: Remove leading/trailing whitespace from lines
 		replaceRegex('Remove leading/trailing whitespace from lines', '[ \\t]+$', '')
 
-		//Rule 7: Indentation (4 spaces)
+		//Rule 7:  Restrict wildcard imports
+		replaceRegex('Restrict wildcard imports', 'import (.*)\\.\\*;', '// Avoid wildcard imports: $1.*')
+
+		//Rule 8: Indentation (4 spaces)
 		indentWithSpaces(4) // Ensures all indentations use 4 spaves
 
         // step 3: Remove unused imports
