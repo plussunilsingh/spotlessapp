@@ -133,6 +133,7 @@ ehthumbs.db
 *.ggl
 
 # Frontend/React (if you have a UI project packaged with Spring Boot)
+
 build/
 dist/
 .eslintcache/
