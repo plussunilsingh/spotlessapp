@@ -3,10 +3,10 @@ name: Spotless Code Formatter
 on:
   pull_request: # Run on every pull request
     branches:
-      - main # Specify target branches
+      - '**' # Match all branches
   push:         # Optionally run on direct push
     branches:
-      - main
+      - '**' # Match all branches
 
 jobs:
   spotless-check:
