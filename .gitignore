@@ -44,7 +44,7 @@ bin/
 *.ctxt
 
 # Gradle-specific ignores
-.gradle/
+.gradle/  # Keep the gradle-wrapper.jar file if it's part of the jar process
 /build/
 /!gradle-wrapper.jar    # Keep the gradle-wrapper.jar file if it's part of the build process
 .gradle/cache/
