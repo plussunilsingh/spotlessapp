@@ -82,7 +82,6 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-
 *.class
 *.jks
 *.pem
@@ -134,7 +133,6 @@ ehthumbs.db
 *.ggl
 
 # Frontend/React (if you have a UI project packaged with Spring Boot)
-
 build/
 dist/
 .eslintcache/
@@ -151,7 +149,7 @@ error.log
 .traces
 
 # IntelliJ Run Configurations (Optional - if sharing run/debug configurations with teammates):
-/run/
-build/
 /gradle/build/
 /build
+/run/
+
