@@ -22,13 +22,15 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter'
 	implementation 'org.springframework.boot:spring-boot-starter-web'
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.5.0'
-	implementation 'org.openapitools.openapidiff:openapi-diff-cli:2.1.0-beta.1'
 	implementation 'org.hibernate.validator:hibernate-validator:8.0.1.Final'
 	implementation 'jakarta.el:jakarta.el-api:5.0.0'
-	implementation 'org.glassfish.expressly:expressly:5.0.0' // EL implementation
+	implementation 'org.glassfish.expressly:expressly:5.0.0'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+	implementation 'org.openapitools.openapidiff:openapi-diff-cli:2.1.0-beta.1'
 }
+
 
 tasks.named('test') {
 	useJUnitPlatform()
@@ -85,13 +87,29 @@ tasks.named('build').configure {
 	dependsOn 'spotlessCheck'
 }
 
-task compareOpenApi(type: JavaExec) {
-	mainClass = 'org.openapitools.openapidiff.core.OpenApiDiffMain'
+tasks.named('build').configure {
+	dependsOn 'compareOpenApi'
+}
+
+
+configurations {
+	openapiDiff
+}
+
+
+dependencies {
+	openapiDiff 'org.openapitools.openapidiff:openapi-diff-cli:2.1.0-beta.1'
+}
+
+tasks.register('compareOpenApi', JavaExec) {
+	group = 'verification'
+	description = 'Compare old and new OpenAPI contracts and output markdown diff'
+
+	mainClass.set('org.openapitools.openapidiff.cli.Main')
 	classpath = configurations.openapiDiff
 	args = [
-			'--old', 'api-contracts/openapi-v1.json',
-			'--new', 'api-contracts/openapi-latest.json',
-			'--format', 'markdown',
-			'--output', 'api-contracts/api-changelog.md'
+			'api-contracts/openapi-v1.json',
+			'api-contracts/openapi-latest.json',
+			'--markdown', 'api-contracts/changelog.md'
 	]
 }
