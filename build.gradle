@@ -170,6 +170,7 @@ openApi {
 
 // Fix Gradle strict dependency validation for forkedSpringBootRun
 tasks.named("forkedSpringBootRun") {
+	doNotTrackState("Accessing workingDir is not supported in Gradle 8+")
 	dependsOn("classes", "bootJar", "jar")
 	mustRunAfter("test", "compileTestJava")
 
