@@ -3,6 +3,7 @@ plugins {
 	id 'org.springframework.boot' version '3.5.4'
 	id 'io.spring.dependency-management' version '1.1.7'
 	id 'com.diffplug.spotless' version '6.23.0'
+	id 'org.springdoc.openapi-gradle-plugin' version '1.8.0'
 }
 
 group = 'com.testp'
@@ -144,4 +145,34 @@ tasks.register('compareOpenApi', JavaExec) {
 			println("⚠️ No diff output found to append.")
 		}
 	}
+}
+
+tasks.named("generateOpenApiDocs") {
+	dependsOn("spotlessApply", "classes")
+	mustRunAfter("test")
+}
+
+tasks.named('compareOpenApi') {
+	dependsOn 'generateOpenApiDocs'
+}
+
+openApi {
+	apiDocsUrl.set("http://localhost:8080/v3/api-docs") // fallback if you run app
+	outputDir.set(file("api-contracts"))
+	outputFileName.set("openapi-latest.json")
+//	format.set("json")
+	waitTimeInSeconds.set(10)
+	customBootRun {
+		args.set(["--spring.profiles.active=default"])
+	}
+}
+
+
+// Fix Gradle strict dependency validation for forkedSpringBootRun
+tasks.named("forkedSpringBootRun") {
+	dependsOn("classes", "bootJar", "jar")
+	mustRunAfter("test", "compileTestJava")
+
+	// 🧩 Add these for Spotless
+	dependsOn("spotlessJava", "spotlessMisc", "spotlessInternalRegisterDependencies")
 }
