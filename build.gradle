@@ -101,15 +101,47 @@ dependencies {
 	openapiDiff 'org.openapitools.openapidiff:openapi-diff-cli:2.1.0-beta.1'
 }
 
+
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+
 tasks.register('compareOpenApi', JavaExec) {
 	group = 'verification'
-	description = 'Compare old and new OpenAPI contracts and output markdown diff'
+	description = 'Compare old and new OpenAPI contracts and append markdown diff with version/date header'
 
 	mainClass.set('org.openapitools.openapidiff.cli.Main')
 	classpath = configurations.openapiDiff
+
+	// Temporary diff file
+	def tempDiffFile = file("api-contracts/openapi-diff-temp.md")
+	def changelogFile = file("api-contracts/changelog.md")
+
+	// Command-line args for OpenAPI diff
 	args = [
 			'api-contracts/openapi-v1.json',
 			'api-contracts/openapi-latest.json',
-			'--markdown', 'api-contracts/changelog.md'
+			'--markdown', tempDiffFile.absolutePath
 	]
+
+	doLast {
+		// Ensure changelog file exists
+		if (!changelogFile.exists()) {
+			changelogFile.parentFile.mkdirs()
+			changelogFile.text = "# API Change Log\n\n"
+		}
+
+		// Add version + date header
+		def date = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
+		def header = "\n## Version ${project.version} — ${date}\n\n"
+
+		// Append diff content if the diff file exists
+		if (tempDiffFile.exists()) {
+			changelogFile.append(header)
+			changelogFile.append(tempDiffFile.text)
+			changelogFile.append("\n---\n")
+			println("✅ OpenAPI diff appended to ${changelogFile}")
+		} else {
+			println("⚠️ No diff output found to append.")
+		}
+	}
 }
