@@ -122,7 +122,7 @@ tasks.register('compareOpenApi1', JavaExec) {
 
 	// Command-line args for OpenAPI diff
 	args = [
-			'api-contracts/openapi-v1.json',
+			'api-contracts/openapi-old.json',
 			'api-contracts/openapi-latest.json',
 			'--markdown', tempDiffFile.absolutePath
 	]
@@ -191,9 +191,20 @@ def summarizeWithOllama(String diffContent) {
 	try {
 		println("🤖 Summarizing changes with Ollama API...")
 		def apiUrl = "http://localhost:11434/api/generate"
+//		prompt: "Summarize this OpenAPI diff in concise business terms (one paragraph, markdown ready):\n\n${diffContent}"
 		def payload = [
 				model : "llama3.1", // Change to your preferred model name if needed
-				prompt: "Summarize this OpenAPI diff in concise business terms (one paragraph, markdown ready):\n\n${diffContent}"
+				prompt: """ Analyze the following OpenAPI diff and provide a business-focused summary:
+							- List multiple key points as markdown bullets, each explaining the business value or impact of the change.
+							- For each key change, suggest a sample Jira ticket number (e.g., IMS-1234) and include a clickable markdown link under a 'Related Jira Tickets' section.
+							- Classify each change as 'Breaking', 'Non-breaking', or 'Documentation'.
+							- If relevant, add a 'Client Impact' section with recommended actions.
+							- If no significant changes, state 'No impactful API changes detected.'
+							- Use markdown formatting for clarity.
+
+							OpenAPI Diff:
+							${diffContent}
+						"""
 		]
 		def conn = new URL(apiUrl).openConnection() as HttpURLConnection
 		conn.setRequestMethod("POST")
@@ -273,7 +284,7 @@ tasks.register('compareOpenApi', JavaExec) {
 	def changelogFile = file("api-contracts/changelog.md")
 
 	args = [
-			'api-contracts/openapi-v1.json',
+			'api-contracts/openapi-old.json',
 			'api-contracts/openapi-latest.json',
 			'--markdown', tempDiffFile.absolutePath
 	]
