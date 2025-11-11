@@ -1,3 +1,9 @@
+
+import groovy.json.*
+import java.nio.charset.StandardCharsets
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+
 plugins {
 	id 'java'
 	id 'org.springframework.boot' version '3.5.4'
@@ -22,14 +28,13 @@ repositories {
 dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter'
 	implementation 'org.springframework.boot:spring-boot-starter-web'
+
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.5.0'
 	implementation 'org.hibernate.validator:hibernate-validator:8.0.1.Final'
 	implementation 'jakarta.el:jakarta.el-api:5.0.0'
 	implementation 'org.glassfish.expressly:expressly:5.0.0'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-
-	implementation 'org.openapitools.openapidiff:openapi-diff-cli:2.1.0-beta.1'
 }
 
 
@@ -92,25 +97,14 @@ tasks.named('build').configure {
 	dependsOn 'compareOpenApi'
 }
 
-
 configurations {
 	openapiDiff
 }
-
 
 dependencies {
 	openapiDiff 'org.openapitools.openapidiff:openapi-diff-cli:2.1.0-beta.1'
 }
 
-import groovy.json.*
-import java.net.HttpURLConnection
-import java.net.URL
-import java.nio.charset.StandardCharsets
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
-def geminiApiKey = System.getenv("GEMINI_API_KEY")
 
 
 tasks.register('compareOpenApi1', JavaExec) {
@@ -173,13 +167,11 @@ openApi {
 	apiDocsUrl.set("http://localhost:8080/v3/api-docs") // fallback if you run app
 	outputDir.set(file("api-contracts"))
 	outputFileName.set("openapi-latest.json")
-//	format.set("json")
 	waitTimeInSeconds.set(10)
 	customBootRun {
 		args.set(["--spring.profiles.active=default"])
 	}
 }
-
 
 // Fix Gradle strict dependency validation for forkedSpringBootRun
 tasks.named("forkedSpringBootRun") {
@@ -191,8 +183,7 @@ tasks.named("forkedSpringBootRun") {
 	dependsOn("spotlessJava", "spotlessMisc", "spotlessInternalRegisterDependencies")
 }
 
-
-def summarizeWithGemini(String diffContent) {
+def summarizeWithOllama(String diffContent) {
 	if (!diffContent) return "No API changes detected."
 
 	try {
@@ -206,28 +197,39 @@ def summarizeWithGemini(String diffContent) {
 
 		def apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}"
 		def payload = [
-				contents: [[
-								   parts: [[
-												   text: "Summarize this OpenAPI diff in concise business terms (one paragraph, markdown ready):\n\n${diffContent}"
-										   ]]
-						   ]]
+				model : "llama3.1", // Change to your preferred model name if needed
+				prompt: "Summarize this OpenAPI diff in concise business terms (one paragraph, markdown ready):\n\n${diffContent}"
 		]
 		def conn = new URL(apiUrl).openConnection() as HttpURLConnection
 		conn.setRequestMethod("POST")
 		conn.setRequestProperty("Content-Type", "application/json")
 		conn.doOutput = true
 		conn.outputStream.withWriter(StandardCharsets.UTF_8.name()) {
-			it.write(groovy.json.JsonOutput.toJson(payload))
+			it.write(JsonOutput.toJson(payload))
 		}
 
-		def responseText = conn.inputStream.getText(StandardCharsets.UTF_8.name())
-		def responseJson = new groovy.json.JsonSlurper().parseText(responseText)
-		def summary = responseJson?.candidates?.getAt(0)?.content?.parts?.getAt(0)?.text ?: "No summary returned."
+		// Read the entire response as lines
+		def responseLines = []
+		conn.inputStream.withReader(StandardCharsets.UTF_8.name()) { reader ->
+			reader.eachLine { line ->
+				responseLines << line
+			}
+		}
 
-		return "### 🧠 Gemini Summary\n\n${summary}\n"
+		// Parse each line as JSON and concatenate the 'response' field
+		def slurper = new JsonSlurper()
+		def summary = responseLines.collect { line ->
+			def json = slurper.parseText(line)
+			json?.response ?: ""
+		}.join("")
+
+		println("==Combined AI response==")
+		println(summary)
+
+		return "### 🧠 AI Summary\n\n${summary}\n"
 	} catch (Exception e) {
-		println("❌ Gemini summarization failed: ${e.message}")
-		return "Gemini summary unavailable due to error."
+		println("❌ AI summarization failed: ${e.message}")
+		return "AI summary unavailable due to error."
 	}
 }
 
@@ -283,7 +285,7 @@ tasks.register('compareOpenApi', JavaExec) {
 
 	doLast {
 		def diffContent = getApiDiff(tempDiffFile)
-		def summaryContent = summarizeWithGemini(diffContent)
+		def summaryContent = summarizeWithOllama(diffContent)
 		updateChangelog(changelogFile, diffContent, summaryContent)
 	}
 }
