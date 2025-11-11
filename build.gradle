@@ -102,11 +102,18 @@ dependencies {
 	openapiDiff 'org.openapitools.openapidiff:openapi-diff-cli:2.1.0-beta.1'
 }
 
-
+import groovy.json.*
+import java.net.HttpURLConnection
+import java.net.URL
+import java.nio.charset.StandardCharsets
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+def geminiApiKey = System.getenv("GEMINI_API_KEY")
 
-tasks.register('compareOpenApi', JavaExec) {
+
+tasks.register('compareOpenApi1', JavaExec) {
 	group = 'verification'
 	description = 'Compare old and new OpenAPI contracts and append markdown diff with version/date header'
 
@@ -161,14 +168,6 @@ tasks.register('compareOpenApi', JavaExec) {
 	}
 }
 
-tasks.named("generateOpenApiDocs") {
-	dependsOn("spotlessApply", "classes")
-	mustRunAfter("test")
-}
-
-tasks.named('compareOpenApi') {
-	dependsOn 'generateOpenApiDocs'
-}
 
 openApi {
 	apiDocsUrl.set("http://localhost:8080/v3/api-docs") // fallback if you run app
@@ -190,4 +189,110 @@ tasks.named("forkedSpringBootRun") {
 
 	// 🧩 Add these for Spotless
 	dependsOn("spotlessJava", "spotlessMisc", "spotlessInternalRegisterDependencies")
+}
+
+
+def summarizeWithGemini(String diffContent) {
+	if (!diffContent) return "No API changes detected."
+
+	try {
+		println("🤖 Summarizing changes with Gemini API...")
+		def apiKey = System.getenv("GEMINI_API_KEY")
+		apiKey=GEMINI_API_KEY='AIzaSyBFK6Kz9-RIykxaZbd7cWDFjr5ZXXMDau0'
+		if (!apiKey) {
+			println("⚠️ Gemini API key not found. Set GEMINI_API_KEY : ${GEMINI_API_KEY} environment variable.")
+			return "Gemini summary unavailable (no API key)."
+		}
+
+		def apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}"
+		def payload = [
+				contents: [[
+								   parts: [[
+												   text: "Summarize this OpenAPI diff in concise business terms (one paragraph, markdown ready):\n\n${diffContent}"
+										   ]]
+						   ]]
+		]
+		def conn = new URL(apiUrl).openConnection() as HttpURLConnection
+		conn.setRequestMethod("POST")
+		conn.setRequestProperty("Content-Type", "application/json")
+		conn.doOutput = true
+		conn.outputStream.withWriter(StandardCharsets.UTF_8.name()) {
+			it.write(groovy.json.JsonOutput.toJson(payload))
+		}
+
+		def responseText = conn.inputStream.getText(StandardCharsets.UTF_8.name())
+		def responseJson = new groovy.json.JsonSlurper().parseText(responseText)
+		def summary = responseJson?.candidates?.getAt(0)?.content?.parts?.getAt(0)?.text ?: "No summary returned."
+
+		return "### 🧠 Gemini Summary\n\n${summary}\n"
+	} catch (Exception e) {
+		println("❌ Gemini summarization failed: ${e.message}")
+		return "Gemini summary unavailable due to error."
+	}
+}
+
+def updateChangelog(File changelogFile, String diffContent, String summaryContent) {
+	if (!changelogFile.exists()) {
+		changelogFile.parentFile.mkdirs()
+		changelogFile.text = "# API Change Log\n\n"
+	}
+
+	def date = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+	def fullDate = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
+	def header = "## Version ${project.version} — ${fullDate}"
+
+	def entryContent = "${header}\n\n${summaryContent}\n${diffContent ?: 'No Change in API contract'}\n---\n"
+	def changelogText = changelogFile.text
+	def sectionPattern = ~/(?ms)^## Version [^\n]+ — ${date}[^\n]*\n.*?\n---\n/
+
+	if (changelogText =~ sectionPattern) {
+		// Replace today's section and move to top
+		changelogText = changelogText.replaceFirst(sectionPattern, "")
+		changelogFile.text = "# API Change Log\n\n" + entryContent + changelogText.replaceFirst(/^# API Change Log\n\n/, "")
+		println("♻️ Overwrote today's API change log section in ${changelogFile} (and moved to top)")
+	} else {
+		changelogFile.text = "# API Change Log\n\n" + entryContent + changelogText.replaceFirst(/^# API Change Log\n\n/, "")
+		println("✅ Prepended new API change log section to ${changelogFile}")
+	}
+}
+
+def getApiDiff(File tempDiffFile) {
+	// This step already happens through openapi-diff CLI
+	if (tempDiffFile.exists()) {
+		println("✅ Diff generated at: ${tempDiffFile}")
+	} else {
+		println("⚠️ No diff file generated.")
+	}
+	return tempDiffFile.text.trim()
+}
+tasks.register('compareOpenApi', JavaExec) {
+	group = 'verification'
+	description = 'Compare old and new OpenAPI contracts, summarize via Gemini, and append markdown diff with version/date header'
+
+	mainClass.set('org.openapitools.openapidiff.cli.Main')
+	classpath = configurations.openapiDiff
+
+	def tempDiffFile = file("api-contracts/openapi-diff-temp.md")
+	def changelogFile = file("api-contracts/changelog.md")
+
+	args = [
+			'api-contracts/openapi-v1.json',
+			'api-contracts/openapi-latest.json',
+			'--markdown', tempDiffFile.absolutePath
+	]
+
+	doLast {
+		def diffContent = getApiDiff(tempDiffFile)
+		def summaryContent = summarizeWithGemini(diffContent)
+		updateChangelog(changelogFile, diffContent, summaryContent)
+	}
+}
+
+tasks.named("generateOpenApiDocs") {
+	dependsOn("spotlessApply", "classes")
+	mustRunAfter("test")
+}
+
+tasks.named('compareOpenApi') {
+	dependsOn 'generateOpenApiDocs'
 }
