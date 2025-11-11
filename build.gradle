@@ -30,6 +30,8 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-web'
 
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.5.0'
+	implementation 'org.openapitools.openapidiff:openapi-diff-cli:2.1.0-beta.1'
+
 	implementation 'org.hibernate.validator:hibernate-validator:8.0.1.Final'
 	implementation 'jakarta.el:jakarta.el-api:5.0.0'
 	implementation 'org.glassfish.expressly:expressly:5.0.0'
@@ -187,15 +189,8 @@ def summarizeWithOllama(String diffContent) {
 	if (!diffContent) return "No API changes detected."
 
 	try {
-		println("🤖 Summarizing changes with Gemini API...")
-		def apiKey = System.getenv("GEMINI_API_KEY")
-		apiKey=GEMINI_API_KEY='AIzaSyBFK6Kz9-RIykxaZbd7cWDFjr5ZXXMDau0'
-		if (!apiKey) {
-			println("⚠️ Gemini API key not found. Set GEMINI_API_KEY : ${GEMINI_API_KEY} environment variable.")
-			return "Gemini summary unavailable (no API key)."
-		}
-
-		def apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}"
+		println("🤖 Summarizing changes with Ollama API...")
+		def apiUrl = "http://localhost:11434/api/generate"
 		def payload = [
 				model : "llama3.1", // Change to your preferred model name if needed
 				prompt: "Summarize this OpenAPI diff in concise business terms (one paragraph, markdown ready):\n\n${diffContent}"
