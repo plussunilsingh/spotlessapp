@@ -189,7 +189,7 @@ def summarizeWithOllama(String diffContent) {
 	if (!diffContent) return "No API changes detected."
 
 	try {
-		println("🤖 Summarizing changes with Ollama API...")
+		println("🤖 Summarizing changes with Ollama API...Thinking")
 		def apiUrl = "http://localhost:11434/api/generate"
 //		prompt: "Summarize this OpenAPI diff in concise business terms (one paragraph, markdown ready):\n\n${diffContent}"
 		def payload = [
