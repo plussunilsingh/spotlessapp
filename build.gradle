@@ -107,64 +107,6 @@ dependencies {
 	openapiDiff 'org.openapitools.openapidiff:openapi-diff-cli:2.1.0-beta.1'
 }
 
-
-
-tasks.register('compareOpenApi1', JavaExec) {
-	group = 'verification'
-	description = 'Compare old and new OpenAPI contracts and append markdown diff with version/date header'
-
-	mainClass.set('org.openapitools.openapidiff.cli.Main')
-	classpath = configurations.openapiDiff
-
-	// Temporary diff file
-	def tempDiffFile = file("api-contracts/openapi-diff-temp.md")
-	def changelogFile = file("api-contracts/changelog.md")
-
-	// Command-line args for OpenAPI diff
-	args = [
-			'api-contracts/openapi-old.json',
-			'api-contracts/openapi-latest.json',
-			'--markdown', tempDiffFile.absolutePath
-	]
-
-	doLast {
-		if (!changelogFile.exists()) {
-			changelogFile.parentFile.mkdirs()
-			changelogFile.text = "# API Change Log\n\n"
-		}
-
-		// Prepare today's date (date only, not time, for section matching)
-		def date = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
-		def fullDate = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
-		def header = "## Version ${project.version} — ${fullDate}"
-
-		// Read diff content
-		def diffContent = tempDiffFile.exists() ? tempDiffFile.text.trim() : ""
-		def entryContent = "${header}\n\n" + (diffContent ? diffContent : "No Change in API contract") + "\n---\n"
-
-		// Read changelog content
-		def changelogText = changelogFile.text
-
-		// Regex to match a section for the current date (date only, not time)
-		def sectionPattern = ~/(?ms)^## Version [^\n]+ — ${date}[^\n]*\n.*?\n---\n/
-
-		if (changelogText =~ sectionPattern) {
-			// Section for today exists, replace it
-			changelogText = changelogText.replaceFirst(sectionPattern, entryContent)
-			// Move today's section to the top (in case it was not already)
-			// Remove today's section from anywhere else, then prepend
-			changelogText = changelogText.replaceFirst(sectionPattern, "")
-			changelogFile.text = "# API Change Log\n\n" + entryContent + changelogText.replaceFirst(/^# API Change Log\n\n/, "")
-			println("♻️ Overwrote today's API change log section in ${changelogFile} (and moved to top)")
-		} else {
-			// Section for today does not exist, prepend as latest
-			changelogFile.text = "# API Change Log\n\n" + entryContent + changelogText.replaceFirst(/^# API Change Log\n\n/, "")
-			println("✅ Prepended new API change log section to ${changelogFile}")
-		}
-	}
-}
-
-
 openApi {
 	apiDocsUrl.set("http://localhost:8080/v3/api-docs") // fallback if you run app
 	outputDir.set(file("api-contracts"))
@@ -175,15 +117,6 @@ openApi {
 	}
 }
 
-// Fix Gradle strict dependency validation for forkedSpringBootRun
-tasks.named("forkedSpringBootRun") {
-	doNotTrackState("Accessing workingDir is not supported in Gradle 8+")
-	dependsOn("classes", "bootJar", "jar")
-	mustRunAfter("test", "compileTestJava")
-
-	// 🧩 Add these for Spotless
-	dependsOn("spotlessJava", "spotlessMisc", "spotlessInternalRegisterDependencies")
-}
 
 def summarizeWithOllama(String diffContent) {
 	if (!diffContent) return "No API changes detected."
@@ -303,4 +236,14 @@ tasks.named("generateOpenApiDocs") {
 
 tasks.named('compareOpenApi') {
 	dependsOn 'generateOpenApiDocs'
+}
+
+// Fix Gradle strict dependency validation for forkedSpringBootRun
+tasks.named("forkedSpringBootRun") {
+	doNotTrackState("Accessing workingDir is not supported in Gradle 8+")
+	dependsOn("classes", "bootJar", "jar")
+	mustRunAfter("test", "compileTestJava")
+
+	// 🧩 Add these for Spotless
+	dependsOn("spotlessJava", "spotlessMisc", "spotlessInternalRegisterDependencies")
 }
