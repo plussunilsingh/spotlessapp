@@ -1,4 +1,4 @@
-name: Spotless Code Formatter
+name: Spotless Code Formatter + Ollama Code Review
 
 on:
   pull_request: # Run on every pull request
@@ -23,3 +23,63 @@ jobs:
         run: |
           ./gradlew spotlessCheck
           
+  ollama-review:
+    needs: spotless
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore previous Ollama review cache
+        id: restore-cache
+        uses: actions/cache@v4
+        with:
+          path: review.txt
+          key: ollama-review-${{ github.event.pull_request.number }}
+          restore-keys: |
+            ollama-review-
+
+      - name: Install Ollama
+        run: |
+          curl -fsSL https://ollama.com/install.sh | sh
+          ollama serve &
+          sleep 5
+          ollama pull codellama
+
+      - name: Generate diff
+        run: |
+          git fetch origin ${{ github.base_ref }}
+          git diff origin/${{ github.base_ref }}...HEAD > changes.diff
+
+      - name: Run Ollama Review
+        id: review
+        run: |
+          # Only re-run if cache was not restored
+          if [ ! -f review.txt ]; then
+            echo "No cached review found — generating a new one..."
+            ollama run codellama "Review this code diff and summarize findings:\n$(cat changes.diff)" > review.txt
+          else
+            echo "Using cached Ollama review from previous run."
+          fi
+
+      - name: Save Ollama review cache
+        if: always()
+        uses: actions/cache@v4
+        with:
+          path: review.txt
+          key: ollama-review-${{ github.event.pull_request.number }}
+
+      - name: Comment Ollama Review on PR
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: Ollama Code Review
+          message: |
+            🤖 **Ollama Review Result (cached if unchanged):**
+            
+            ${{ steps.review.outputs.review_output || 'See cached review.txt content below:' }}
+                          
+                          ```
+                          $(cat review.txt)
+                          ```

@@ -1,3 +1,9 @@
+
+import groovy.json.*
+import java.nio.charset.StandardCharsets
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+
 plugins {
 	id 'java'
 	id 'org.springframework.boot' version '3.5.4'
@@ -22,14 +28,15 @@ repositories {
 dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter'
 	implementation 'org.springframework.boot:spring-boot-starter-web'
+
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.5.0'
+	implementation 'org.openapitools.openapidiff:openapi-diff-cli:2.1.0-beta.1'
+
 	implementation 'org.hibernate.validator:hibernate-validator:8.0.1.Final'
 	implementation 'jakarta.el:jakarta.el-api:5.0.0'
 	implementation 'org.glassfish.expressly:expressly:5.0.0'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-
-	implementation 'org.openapitools.openapidiff:openapi-diff-cli:2.1.0-beta.1'
 }
 
 
@@ -92,72 +99,133 @@ tasks.named('build').configure {
 	dependsOn 'compareOpenApi'
 }
 
-
 configurations {
 	openapiDiff
 }
-
 
 dependencies {
 	openapiDiff 'org.openapitools.openapidiff:openapi-diff-cli:2.1.0-beta.1'
 }
 
+openApi {
+	apiDocsUrl.set("http://localhost:8080/v3/api-docs") // fallback if you run app
+	outputDir.set(file("api-contracts"))
+	outputFileName.set("openapi-latest.json")
+	waitTimeInSeconds.set(10)
+	customBootRun {
+		args.set(["--spring.profiles.active=default"])
+	}
+}
 
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
 
+def summarizeWithOllama(String diffContent) {
+	if (!diffContent) return "No API changes detected."
+
+	try {
+		println("🤖 Summarizing changes with Ollama API...Thinking")
+		def apiUrl = "http://localhost:11434/api/generate"
+//		prompt: "Summarize this OpenAPI diff in concise business terms (one paragraph, markdown ready):\n\n${diffContent}"
+		def payload = [
+				model : "llama3.1", // Change to your preferred model name if needed
+				prompt: """ Analyze the following OpenAPI diff and provide a business-focused summary:
+							- List multiple key points as markdown bullets, each explaining the business value or impact of the change.
+							- For each key change, suggest a sample Jira ticket number (e.g., IMS-1234) and include a clickable markdown link under a 'Related Jira Tickets' section.
+							- Classify each change as 'Breaking', 'Non-breaking', or 'Documentation'.
+							- If relevant, add a 'Client Impact' section with recommended actions.
+							- If no significant changes, state 'No impactful API changes detected.'
+							- Use markdown formatting for clarity.
+
+							OpenAPI Diff:
+							${diffContent}
+						"""
+		]
+		def conn = new URL(apiUrl).openConnection() as HttpURLConnection
+		conn.setRequestMethod("POST")
+		conn.setRequestProperty("Content-Type", "application/json")
+		conn.doOutput = true
+		conn.outputStream.withWriter(StandardCharsets.UTF_8.name()) {
+			it.write(JsonOutput.toJson(payload))
+		}
+
+		// Read the entire response as lines
+		def responseLines = []
+		conn.inputStream.withReader(StandardCharsets.UTF_8.name()) { reader ->
+			reader.eachLine { line ->
+				responseLines << line
+			}
+		}
+
+		// Parse each line as JSON and concatenate the 'response' field
+		def slurper = new JsonSlurper()
+		def summary = responseLines.collect { line ->
+			def json = slurper.parseText(line)
+			json?.response ?: ""
+		}.join("")
+
+		println("==Combined AI response==")
+		println(summary)
+
+		return "### 🧠 AI Summary\n\n${summary}\n"
+	} catch (Exception e) {
+		println("❌ AI summarization failed: ${e.message}")
+		return "AI summary unavailable due to error."
+	}
+}
+
+def updateChangelog(File changelogFile, String diffContent, String summaryContent) {
+	if (!changelogFile.exists()) {
+		changelogFile.parentFile.mkdirs()
+		changelogFile.text = "# API Change Log\n\n"
+	}
+
+	def date = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+	def fullDate = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
+	def header = "## Version ${project.version} — ${fullDate}"
+
+	def entryContent = "${header}\n\n${summaryContent}\n${diffContent ?: 'No Change in API contract'}\n---\n"
+	def changelogText = changelogFile.text
+	def sectionPattern = ~/(?ms)^## Version [^\n]+ — ${date}[^\n]*\n.*?\n---\n/
+
+	if (changelogText =~ sectionPattern) {
+		// Replace today's section and move to top
+		changelogText = changelogText.replaceFirst(sectionPattern, "")
+		changelogFile.text = "# API Change Log\n\n" + entryContent + changelogText.replaceFirst(/^# API Change Log\n\n/, "")
+		println("♻️ Overwrote today's API change log section in ${changelogFile} (and moved to top)")
+	} else {
+		changelogFile.text = "# API Change Log\n\n" + entryContent + changelogText.replaceFirst(/^# API Change Log\n\n/, "")
+		println("✅ Prepended new API change log section to ${changelogFile}")
+	}
+}
+
+def getApiDiff(File tempDiffFile) {
+	// This step already happens through openapi-diff CLI
+	if (tempDiffFile.exists()) {
+		println("✅ Diff generated at: ${tempDiffFile}")
+	} else {
+		println("⚠️ No diff file generated.")
+	}
+	return tempDiffFile.text.trim()
+}
 tasks.register('compareOpenApi', JavaExec) {
 	group = 'verification'
-	description = 'Compare old and new OpenAPI contracts and append markdown diff with version/date header'
+	description = 'Compare old and new OpenAPI contracts, summarize via Gemini, and append markdown diff with version/date header'
 
 	mainClass.set('org.openapitools.openapidiff.cli.Main')
 	classpath = configurations.openapiDiff
 
-	// Temporary diff file
 	def tempDiffFile = file("api-contracts/openapi-diff-temp.md")
 	def changelogFile = file("api-contracts/changelog.md")
 
-	// Command-line args for OpenAPI diff
 	args = [
-			'api-contracts/openapi-v1.json',
+			'api-contracts/openapi-old.json',
 			'api-contracts/openapi-latest.json',
 			'--markdown', tempDiffFile.absolutePath
 	]
 
 	doLast {
-		if (!changelogFile.exists()) {
-			changelogFile.parentFile.mkdirs()
-			changelogFile.text = "# API Change Log\n\n"
-		}
-
-		// Prepare today's date (date only, not time, for section matching)
-		def date = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
-		def fullDate = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
-		def header = "## Version ${project.version} — ${fullDate}"
-
-		// Read diff content
-		def diffContent = tempDiffFile.exists() ? tempDiffFile.text.trim() : ""
-		def entryContent = "${header}\n\n" + (diffContent ? diffContent : "No Change in API contract") + "\n---\n"
-
-		// Read changelog content
-		def changelogText = changelogFile.text
-
-		// Regex to match a section for the current date (date only, not time)
-		def sectionPattern = ~/(?ms)^## Version [^\n]+ — ${date}[^\n]*\n.*?\n---\n/
-
-		if (changelogText =~ sectionPattern) {
-			// Section for today exists, replace it
-			changelogText = changelogText.replaceFirst(sectionPattern, entryContent)
-			// Move today's section to the top (in case it was not already)
-			// Remove today's section from anywhere else, then prepend
-			changelogText = changelogText.replaceFirst(sectionPattern, "")
-			changelogFile.text = "# API Change Log\n\n" + entryContent + changelogText.replaceFirst(/^# API Change Log\n\n/, "")
-			println("♻️ Overwrote today's API change log section in ${changelogFile} (and moved to top)")
-		} else {
-			// Section for today does not exist, prepend as latest
-			changelogFile.text = "# API Change Log\n\n" + entryContent + changelogText.replaceFirst(/^# API Change Log\n\n/, "")
-			println("✅ Prepended new API change log section to ${changelogFile}")
-		}
+		def diffContent = getApiDiff(tempDiffFile)
+		def summaryContent = summarizeWithOllama(diffContent)
+		updateChangelog(changelogFile, diffContent, summaryContent)
 	}
 }
 
@@ -169,18 +237,6 @@ tasks.named("generateOpenApiDocs") {
 tasks.named('compareOpenApi') {
 	dependsOn 'generateOpenApiDocs'
 }
-
-openApi {
-	apiDocsUrl.set("http://localhost:8080/v3/api-docs") // fallback if you run app
-	outputDir.set(file("api-contracts"))
-	outputFileName.set("openapi-latest.json")
-//	format.set("json")
-	waitTimeInSeconds.set(10)
-	customBootRun {
-		args.set(["--spring.profiles.active=default"])
-	}
-}
-
 
 // Fix Gradle strict dependency validation for forkedSpringBootRun
 tasks.named("forkedSpringBootRun") {
