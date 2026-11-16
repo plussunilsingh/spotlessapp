@@ -23,7 +23,7 @@ jobs:
         run: |
           ./gradlew spotlessCheck
           
-  ollama-review:
+  ollama_review:
     needs: spotless
     runs-on: ubuntu-latest
     permissions:
